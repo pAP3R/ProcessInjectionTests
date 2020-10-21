@@ -92,5 +92,12 @@ namespace ProcessInjection_Test1
 
             return;
         }
+
+
+        static void reflective_Injection()
+        {
+
+            return;
+        }
     }
 }
