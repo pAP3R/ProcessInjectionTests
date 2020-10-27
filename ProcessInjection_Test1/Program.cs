@@ -14,6 +14,16 @@ namespace ProcessInjection_Test1
         const int PROCESS_VM_WRITE = 0x0020;
         const int PROCESS_VM_READ = 0x0010;
 
+        // used for memory allocation
+        const uint MEM_COMMIT = 0x00001000;
+        const uint MEM_RESERVE = 0x00002000;
+        const uint PAGE_READWRITE = 4;
+
+        // used for CreateFileA
+        const int GENERIC_READ = 0x00000001;
+        const int OPEN_EXISTING = 1;
+        const int FILE_ATTRIBUTE_NORMAL = 128;
+
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int processId);
 
@@ -27,10 +37,16 @@ namespace ProcessInjection_Test1
         public static extern IntPtr VirtualAllocEx(IntPtr procHandleess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
 
         [DllImport("kernel32")]
+        static extern IntPtr CreateFileA(string lpFileName, int dwDesiredAccess, int dwShareMode, int lpSecurityAttributes, int dwCreationDisposition, int dwFlagsAndAttributes, IntPtr hTemplateFile);
+
+        [DllImport("kernel32")]
         static extern IntPtr HeapAlloc(IntPtr hHeap, uint dwFlags, uint dwSize);
 
         [DllImport("kernel32")]
         static extern IntPtr GetProcessHeap();
+
+        [DllImport("kernel32")]
+        static extern IntPtr ReadFile(IntPtr hFile, IntPtr lpBuffer, uint dwNumberOfBytesToRead, uint lpNumberOfBytesRead, uint lpOverlapped);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool WriteProcessMemory(IntPtr procHandleess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out UIntPtr lpNumberOfBytesWritten);
@@ -38,10 +54,7 @@ namespace ProcessInjection_Test1
         [DllImport("kernel32.dll")]
         static extern IntPtr CreateRemoteThread(IntPtr procHandleess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
 
-        // used for memory allocation
-        const uint MEM_COMMIT = 0x00001000;
-        const uint MEM_RESERVE = 0x00002000;
-        const uint PAGE_READWRITE = 4;
+
 
         static void Main(string[] args)
         {
@@ -139,6 +152,7 @@ namespace ProcessInjection_Test1
                 FileInfo fi = new FileInfo(dllName);
                 long dllSize = fi.Length;
                 Console.WriteLine("[*] Target DLL length: " + dllSize.ToString());
+                IntPtr hFile = CreateFileA(dllName, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
 
                 // Now, allocate that much memory into the target process
                 Console.WriteLine("[+] Allocating memory...");
@@ -148,8 +162,15 @@ namespace ProcessInjection_Test1
                 // The DLL needs to be read into memory, then copied into the process
                 // WIP
                 IntPtr lpBuffer = HeapAlloc(GetProcessHeap(), 0, (uint)dllSize);
-                
-                //bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, lpBuffer, (uint)dllSize, IntPtr.Zero);
+                uint bytesRead = 0;
+                UIntPtr bytesWritten;
+                ReadFile(hFile, lpBuffer, (uint)dllSize, bytesRead, 0);
+                byte[] test = null;
+                Marshal.Copy(lpBuffer, test, 0, (int)dllSize);
+
+                bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, test, (uint)dllSize, out bytesWritten);
+
+
             }
 
             return;
