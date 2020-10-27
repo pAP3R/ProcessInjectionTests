@@ -71,41 +71,21 @@ namespace ProcessInjection_Test1
             
             Console.WriteLine("[!] Process Injection Tests");
 
+            if (args[2] == "ref")
+            {
+                Console.WriteLine("[!] Injecting using Reflective Injection");
+                reflective_Injection(processName, dllName);
+            }
             if (args[2] == "crt")
             {
                 Console.WriteLine("[!] Injecting using CreateRemoteThread()");
-                Console.WriteLine("[!] Inject DLL path (1) or full DLL (2)?\nEnter 1 or 2: ");
-                string injectType = Console.ReadLine();
-                if (injectType == "1")
-                {
-                    Console.WriteLine("[+] Using the LoadLibraryA() (DLL path) technique");
-                    crt_Injection(processName, dllName, true);
-                }
-                if (injectType == "2")
-                {
-                    Console.WriteLine("[+] Using the jump to DllMain technique");
-                    crt_Injection(processName, dllName, false);
-                }
-                else
-                {
-                    Console.WriteLine("[!] No valid option chosen, quitting!");
-                    Environment.Exit(1);
-                }
-                
+                crt_Injection(processName, dllName);
             }
-            else
-            {
-                Console.WriteLine("[!] Currently no other options. Quitting, ha!");
-                Environment.Exit(1);
-            }
-
             return;
-
         }
 
-        static void crt_Injection(string processName, string dllName, bool path)
+        static void crt_Injection(string processName, string dllName)
         {
-
             byte[] bdll = System.Text.Encoding.Default.GetBytes(dllName);
 
             // Get a handle to the target process 
@@ -116,71 +96,65 @@ namespace ProcessInjection_Test1
             IntPtr procHandle = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, false, proc.Id);
             Console.WriteLine("[+] Got Process Handle: " + procHandle.ToInt64());
 
+            // Load the address of the LoadLibraryA function
+            // We'll need this in order to actually LOAD our allocated memory when we call CRT
+            IntPtr loadLibrary_Address = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
+            Console.WriteLine("[+] Got LoadLibraryA Address: " + loadLibrary_Address.ToInt64());
 
-            // Check to see if we're injecting the DLL's path, to be loaded with LoadLibraryA() or writing the DLL's contents into some allocated memory
-            // The LoadLibraryA and jump to DllMain techniques are very similar, but I've chosen to keep them fully separate for readability
-            if (path == true)
+            // Now, we allocate some memory within the target process that we'll use for writing
+            Console.WriteLine("[+] Allocating memory...");
+            IntPtr virtualAllocMemAddress = VirtualAllocEx(procHandle, IntPtr.Zero, (uint)((dllName.Length + 1) * Marshal.SizeOf(typeof(char))), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            Console.WriteLine("[+] Allocated Memory: " + virtualAllocMemAddress.ToString());
+
+            // Here we write the path to the DLL we're injecting into the memory of the target process, using the address we saved when calling VirtualAllocEx
+            Console.WriteLine("[+] Writing memory...");
+            UIntPtr bytesWritten;
+            bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, bdll, (uint)((dllName.Length + 1) * Marshal.SizeOf(typeof(char))), out bytesWritten);
+            if (res == true)
             {
-                // Load the address of the LoadLibraryA function
-                // We'll need this in order to actually LOAD our allocated memory when we call CRT
-                IntPtr loadLibrary_Address = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
-                Console.WriteLine("[+] Got LoadLibraryA Address: " + loadLibrary_Address.ToInt64());
-
-                // Now, we allocate some memory within the target process that we'll use for writing
-                Console.WriteLine("[+] Allocating memory...");
-                IntPtr virtualAllocMemAddress = VirtualAllocEx(procHandle, IntPtr.Zero, (uint)((dllName.Length + 1) * Marshal.SizeOf(typeof(char))), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                Console.WriteLine("[+] Allocated Memory: " + virtualAllocMemAddress.ToString());
-
-                // Here we write the path to the DLL we're injecting into the memory of the target process, using the address we saved when calling VirtualAllocEx
-                Console.WriteLine("[+] Writing memory...");
-                UIntPtr bytesWritten;
-                bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, bdll, (uint)((dllName.Length + 1) * Marshal.SizeOf(typeof(char))), out bytesWritten);
-                if (res == true)
-                {
-                    Console.WriteLine("[+] Process memory written, wrote " + bytesWritten.ToString() + " bytes");
-                }
-
-                // Finally, we can run CRT with the handle of the target process, the address of LoadLibraryA and the address of the allocated memory
-                Console.WriteLine("[!] Prerequisites satisfied, attempting to CreateRemoteThread...");
-                var threadId = CreateRemoteThread(procHandle, IntPtr.Zero, 0, loadLibrary_Address, virtualAllocMemAddress, 0, IntPtr.Zero);
-                Console.WriteLine("[+] Created threadId: " + threadId.ToString());
-
+                Console.WriteLine("[+] Process memory written, wrote " + bytesWritten.ToString() + " bytes");
             }
-            else
-            {
-                // First, we need the size of the DLL we're injecting
-                FileInfo fi = new FileInfo(dllName);
-                long dllSize = fi.Length;
-                Console.WriteLine("[*] Target DLL length: " + dllSize.ToString());
-                IntPtr hFile = CreateFileA(dllName, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
 
-                // Now, allocate that much memory into the target process
-                Console.WriteLine("[+] Allocating memory...");
-                IntPtr virtualAllocMemAddress = VirtualAllocEx(procHandle, IntPtr.Zero, (uint)dllSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-                Console.WriteLine("[+] Allocated Memory: " + virtualAllocMemAddress.ToString());
-
-                // The DLL needs to be read into memory, then copied into the process
-                // WIP
-                IntPtr lpBuffer = HeapAlloc(GetProcessHeap(), 0, (uint)dllSize);
-                uint bytesRead = 0;
-                UIntPtr bytesWritten;
-                ReadFile(hFile, lpBuffer, (uint)dllSize, bytesRead, 0);
-                byte[] test = null;
-                Marshal.Copy(lpBuffer, test, 0, (int)dllSize);
-
-                bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, test, (uint)dllSize, out bytesWritten);
-
-
-            }
+            // Finally, we can run CRT with the handle of the target process, the address of LoadLibraryA and the address of the allocated memory
+            Console.WriteLine("[!] Prerequisites satisfied, attempting to CreateRemoteThread...");
+            var threadId = CreateRemoteThread(procHandle, IntPtr.Zero, 0, loadLibrary_Address, virtualAllocMemAddress, 0, IntPtr.Zero);
+            Console.WriteLine("[+] Created threadId: " + threadId.ToString());
 
             return;
         }
 
 
-        static void reflective_Injection()
+        static void reflective_Injection(string processName, string dllName)
         {
-            
+            // Get a handle to the target process 
+            // This is the process we're injecting INTO
+            Console.WriteLine("[+] Attempting to find " + processName);
+            Process proc = Process.GetProcessesByName(processName)[0];
+            Console.WriteLine("[+] Got Process: " + proc.Id);
+            IntPtr procHandle = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, false, proc.Id);
+            Console.WriteLine("[+] Got Process Handle: " + procHandle.ToInt64());
 
+            // First, we need the size of the DLL we're injecting
+            FileInfo fi = new FileInfo(dllName);
+            long dllSize = fi.Length;
+            Console.WriteLine("[*] Target DLL length: " + dllSize.ToString());
+            IntPtr hFile = CreateFileA(dllName, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+
+            // Now, allocate that much memory into the target process
+            Console.WriteLine("[+] Allocating memory...");
+            IntPtr virtualAllocMemAddress = VirtualAllocEx(procHandle, IntPtr.Zero, (uint)dllSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            Console.WriteLine("[+] Allocated Memory: " + virtualAllocMemAddress.ToString());
+
+            // The DLL needs to be read into memory, then copied into the process
+            // WIP
+            IntPtr lpBuffer = HeapAlloc(GetProcessHeap(), 0, (uint)dllSize);
+            uint bytesRead = 0;
+            UIntPtr bytesWritten;
+            ReadFile(hFile, lpBuffer, (uint)dllSize, bytesRead, 0);
+            byte[] test = null;
+            Marshal.Copy(lpBuffer, test, 0, (int)dllSize);
+
+            bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, test, (uint)dllSize, out bytesWritten);
             return;
         }
     }
