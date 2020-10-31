@@ -1,7 +1,8 @@
 {
   "profiles": {
     "ProcessInjection_Test1": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\\\Users\\\\Howard\\\\Desktop\\\\calc.dll\" notepad crt"
     }
   }
 }
