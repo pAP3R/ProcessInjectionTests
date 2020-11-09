@@ -42,7 +42,7 @@ namespace ProcessInjection_Test1
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int processId);
 
-        [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
         static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
@@ -73,6 +73,7 @@ namespace ProcessInjection_Test1
         {
             if (args.Length < 2)
             {
+                Console.WriteLine("[!] Process Injection Tests");
                 Console.WriteLine("[*] Usage: InjectionTests.exe <TARGET_PROCESS> <TYPE>");
                 Console.WriteLine("[*] e.g.   InjectionTests.exe notepad crt");
                 Environment.Exit(1);
@@ -80,7 +81,6 @@ namespace ProcessInjection_Test1
             
             string processName = args[0];
             string type = args[1];            
-            Console.WriteLine("[!] Process Injection Tests");
 
             if (args[2] == "crt")
             {
@@ -174,5 +174,38 @@ namespace ProcessInjection_Test1
 
             return;
         }
+
+        // SIR Injection
+        static void sir_injection(Process pName)
+        {
+            // OpenProcess?
+            // SuspendThread
+            // VirtualAllocEx
+            // WriteProcessMemory
+            // PTHREAD_START_ROUTINE
+            // QueueUserAPC
+            // ResumeThread
+
+
+            // Suspend process and threads
+            // https://stackoverflow.com/questions/71257/suspend-process-in-c-sharp
+            var proc = Process.GetProcessById(pName.Id);
+
+            foreach (ProcessThread pT in proc.Threads)
+            {
+                IntPtr pOpenThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)pT.Id);
+
+                if (pOpenThread == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                SuspendThread(pOpenThread);
+
+                CloseHandle(pOpenThread);
+            }
+
+        }
+
     }
 }
