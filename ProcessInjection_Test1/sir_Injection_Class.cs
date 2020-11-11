@@ -30,9 +30,50 @@ namespace ProcessInjection_Test1
         [DllImport("kernel32", CharSet = CharSet.Auto, SetLastError = true)]
         static extern bool CloseHandle(IntPtr handle);
 
+        // Suspend process and threads
+        // https://stackoverflow.com/questions/71257/suspend-process-in-c-sharp
+        public void suspend_Resume(Process proc, bool sr)
+        {
+            foreach (ProcessThread pT in proc.Threads)
+            {
+                IntPtr pOpenThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)pT.Id);
+
+                if (pOpenThread == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                if (sr)
+                {
+                    SuspendThread(pOpenThread);
+                    CloseHandle(pOpenThread);
+                }
+                else
+                {
+                    var suspendCount = 0;
+                    do
+                    {
+                        suspendCount = ResumeThread(pOpenThread);
+                    } while (suspendCount > 0);
+                }    
+            }
+        }
 
 
-        public void sir_Injection(string processName, bool path)
+        // Spawn a process, inject shellcode
+        public void sir_Injection(byte[] sc)
+        {
+
+        }
+
+        // Spawn a process, inject a DLL
+        public void sir_Injection(string dllName)
+        {
+
+        }
+
+        // Target a running process, inject shellcode
+        public void sir_Injection(string processName, byte[] sc)
         {
             // SuspendThread
             // OpenProcess (For DLL)
@@ -46,48 +87,27 @@ namespace ProcessInjection_Test1
             Console.WriteLine("[+] Attempting to find " + processName);
             Process proc = Process.GetProcessesByName(processName)[0];
 
-            // Suspend process and threads
-            // https://stackoverflow.com/questions/71257/suspend-process-in-c-sharp
+            // Suspend the process
+            suspend_Resume(proc, true);
 
-            Console.WriteLine("[+] Process has " + proc.Threads.Count + " threads, attempting to suspend them");
-
-            foreach (ProcessThread pT in proc.Threads)
-            {
-                IntPtr pOpenThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)pT.Id);
-
-                if (pOpenThread == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                SuspendThread(pOpenThread);
-                CloseHandle(pOpenThread);
-            }
+            // Resume the process
+            suspend_Resume(proc, false);
 
 
+        }
 
+        // Target a running process, inject a DLL
+        public void sir_Injection(string processName, string dllName)
+        {
 
+            Console.WriteLine("[+] Attempting to find " + processName);
+            Process proc = Process.GetProcessesByName(processName)[0];
 
-            // Finally, resume the process
-            Console.WriteLine("[+] Resuming process...");
-            foreach (ProcessThread pT in proc.Threads)
-            {
-                IntPtr pOpenThread = OpenThread(ThreadAccess.SUSPEND_RESUME, false, (uint)pT.Id);
+            // Suspend the process
+            suspend_Resume(proc, true);
 
-                if (pOpenThread == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var suspendCount = 0;
-                do
-                {
-                    suspendCount = ResumeThread(pOpenThread);
-                } while (suspendCount > 0);
-
-                CloseHandle(pOpenThread);
-                Console.WriteLine("[+] Process resumed!");
-            }
+            // Resume the process
+            suspend_Resume(proc, false);
 
         }
     }
