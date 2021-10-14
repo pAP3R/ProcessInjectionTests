@@ -12,6 +12,6 @@ The crt_Injection() function uses the classic CreateRemoteThread() workflow, obv
 
 Current Usage:
 
-		.\ProcessInjection_Test1.exe DLL_PATH TargetProgram
+		.\ProcessInjection_Test1.exe Target_Proc Type
 	e.g.
-		.\ProcessInjection_Test1.exe "C:\\Users\\Howard\\Desktop\\calc.dll" notepad
+		.\ProcessInjection_Test1.exe notepad crt

@@ -51,7 +51,7 @@ namespace ProcessInjection_Test1
             string processName = args[0];
             string type = args[1];
 
-            Console.WriteLine("\n[+] Shellcode [1] or DLL Path [2]?");
+            Console.WriteLine("\n[+] Injecting Shellcode [1] or a DLL [2]?");
             string payload = Console.ReadLine();
 
             if (type == "crt")
