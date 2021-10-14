@@ -42,7 +42,7 @@ namespace ProcessInjection_Test1
         const uint PAGE_EXECUTE_READWRITE = 0x40;
 
 
-        // This is the function for performing injection via the CreateRemoteThread() WinAPI call
+        // This is a function for performing injection via the CreateRemoteThread() WinAPI call
         // crt_Injection takes two arguments:
         //      processName: A currently running process (the injection target)
         //      dllName: The injecting DLL's path
